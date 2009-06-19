@@ -1,0 +1,6 @@
+host: gateway.sandbox.push.apple.com
+port: 2195
+starling_addr: localhost:22195
+outbound_queue: apns_send
+key_file: sagan-push-development.key
+cert_file: sagan-push-development.crt

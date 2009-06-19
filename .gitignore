@@ -1,0 +1,8 @@
+*~
+.DS_Store
+
+tmp/starling/*
+config/apns.yml
+config/*.pem
+config/*.crt
+config/*.key
