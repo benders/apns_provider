@@ -4,7 +4,21 @@ $LOAD_PATH << File.dirname(__FILE__)
 require 'rubygems'
 require 'memcache'
 
-starling = MemCache.new('localhost:22195')
+require 'active_support/core_ext/hash/keys'
+class Hash
+  include ActiveSupport::CoreExtensions::Hash::Keys
+end
+
+def config
+  config_path = File.join(File.dirname(__FILE__), 'config', 'apns.yml')
+  @@config ||= YAML.load_file(config_path).symbolize_keys
+  @@config
+rescue
+  STDERR.puts "Could not load config: #{$!}"
+  exit!
+end
+
+starling = MemCache.new(config[:starling_addr])
 
 token = ARGV[0].downcase.gsub(/[^0-9a-f]/, '')
 num = rand(99)
