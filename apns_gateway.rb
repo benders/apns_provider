@@ -51,16 +51,32 @@ class EmHandler < EventMachine::Connection
     logger.info "SSL Session Established"
     # logger.debug "Got Peer Certificate:\n" + get_peer_cert
     @sid = @channel.subscribe do |x|
-      logger.debug "Sending: #{x.inspect}"
+      logger.debug "Sending to APNS: #{x.inspect}"
       send_data(x)
     end
   end
 
   def unbind
     @channel.unsubscribe @sid
-    EventMachine::stop_event_loop
   end
 end
+
+def decrease_poll_speed( opts )
+  unless opts['failing']
+    opts['failing'] = true
+    logger.error "Could not connect to Starling, decreasing poll frequency"
+    opts['timer'].interval = 30
+  end
+end
+
+def restore_poll_speed( opts )
+  if opts['failing']
+    opts['failing'] = false
+    logger.error "Reconnected to Starling, restoring poll frequency"
+    opts['timer'].interval = 1
+  end
+end
+
 
 def start(config)
   logger.debug "Entering Start method."
@@ -80,10 +96,19 @@ def start(config)
       EventMachine::connect( config[:host], config[:port], EmHandler, config, channel)
       
       # This block will be called periodically to poll the Starling queue
-      EventMachine::add_periodic_timer(1) do
-        to_send = starling.get(INCOMING_QUEUE)
+      @sx = {'failing' => false}
+      @sx['timer'] = EventMachine::PeriodicTimer.new(1) do
+        begin
+          to_send = starling.get(INCOMING_QUEUE)
+        rescue MemCache::MemCacheError
+          to_send = false
+          decrease_poll_speed( @sx )
+        else
+          restore_poll_speed( @sx )
+        end
+
         if to_send
-          logger.info "Received message: #{to_send.inspect}"
+          logger.info "Received message from Starling: #{to_send.inspect}"
           begin
             n = Apns::Notification.new(to_send[:device_token])
             n.alert = to_send[:alert]
@@ -129,5 +154,5 @@ begin
   logger.info "Starting APNS Gateway"  
   start(config)  
 rescue Exception => ex
-  logger.fatal "Exception in APNS Gateway: #{ex} at #{ex.backtrace[0]}"
+  logger.fatal "#{ex.class} in APNS Gateway: \"#{ex}\" at\n #{ex.backtrace.join("\n")}"
 end
